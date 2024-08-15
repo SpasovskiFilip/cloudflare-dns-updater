@@ -25,11 +25,19 @@ from varname import nameof
 # Replace with your actual data
 CF_API_TOKEN = os.getenv("CF_API_TOKEN")
 CF_ZONE_ID = os.getenv("CF_ZONE_ID")
+CF_ZONE_ID_LIST = CF_ZONE_ID.split(',')
 DNS_RECORD_COMMENT_KEY = os.getenv("DNS_RECORD_COMMENT_KEY")
+DNS_RECORD_COMMENT_KEY_LIST = DNS_RECORD_COMMENT_KEY.split(',')
 DOMAINS_FILE_PATH = os.getenv("DOMAINS_FILE_PATH")
+DOMAINS = os.getenv("DOMAINS")
+DOMAINS_LIST = []
+if DOMAINS is not None:
+    DOMAINS_LIST = DOMAINS.split(',')
 SCHEDULE_MINUTES = int(os.getenv("SCHEDULE_MINUTES", "5"))
-TTL = int(os.getenv("TTL"))
-PROXIED = os.getenv("PROXIED")
+TTL_ENV = os.getenv("TTL")
+TTL = int(TTL_ENV or "1")
+PROX_ENV = os.getenv("PROXIED")
+PROXIED = bool(PROX_ENV)
 TYPE = os.getenv("TYPE")
 
 # Define API endpoints
@@ -275,6 +283,7 @@ def get_dns_records_by_comment(zone_id, comment_key):
     if response.status_code == 200:
         records = response.json()["result"]
         if records and len(records) > 0:
+            LOGGER.info("Request was successful and found %s valid domains!", len(records))
             return records
         LOGGER.warning(
             "Request was successful but no valid domains were found: %s",
@@ -282,8 +291,32 @@ def get_dns_records_by_comment(zone_id, comment_key):
         )
         return []
 
-    LOGGER.error("Failed to get dns_records with comment key: %s", response.json())
+    LOGGER.error(
+        "Failed to get records! | HTTP response: %s | Error code: %s | Error message: %s",
+        response.status_code,
+        response.json()['errors'][0]['code'],
+        response.json()['errors'][0]['message'],
+    )
 
+    return []
+
+def get_dns_records_by_comments(zone_id_list, comment_key_list):
+    """Fetches all DNS records that contain the specified comment keys 
+    inside of the comment from all specified zones"""
+    LOGGER.info(
+        "Fetching DNS record with comment keys: %s, from %s zone(s)",
+        comment_key_list,
+        len(zone_id_list),
+    )
+    result = []
+    for zone_id in zone_id_list:
+        for comment_key in comment_key_list:
+            records = get_dns_records_by_comment(zone_id, comment_key)
+            if records and len(records) > 0:
+                result.append(records)
+    if result and len(result) > 0:
+        return result
+    LOGGER.warning("Request was successful but no valid domains were found!")
     return []
 
 
@@ -319,7 +352,9 @@ def get_all_dns_records():
             "Using DNS_RECORD_COMMENT_KEY='%s' to find DNS records to update.",
             DNS_RECORD_COMMENT_KEY,
         )
-        domain_records = get_dns_records_by_comment(CF_ZONE_ID, DNS_RECORD_COMMENT_KEY)
+        domain_records_list = get_dns_records_by_comments(CF_ZONE_ID_LIST, DNS_RECORD_COMMENT_KEY_LIST)
+        for list_item in domain_records_list:
+            domain_records += list_item
     else:
         LOGGER.info(
             "Using DOMAINS_FILE_PATH='%s' to find DNS records to update.",
@@ -354,7 +389,7 @@ def check_and_update_dns_record_type(record, domain_name):
 
 def check_and_update_dns_record_proxy(record, domain_name):
     """Function to check the PROXIED env variable and update the domain proxy"""
-    if PROXIED is not None:
+    if PROX_ENV is not None:
         if record["proxiable"] is True and PROXIED != record["proxied"]:
             update_dns_record_proxy(record, PROXIED)
         else:
@@ -374,8 +409,8 @@ def check_and_update_dns_record_proxy(record, domain_name):
 
 def check_and_update_dns_record_ttl(record, domain_name):
     """Function to check the TTL env variable and update the domain ttl"""
-    if TTL is not None:
-        if TTL != record["ttl"] and PROXIED is False:
+    if TTL_ENV is not None:
+        if TTL != record["ttl"] and PROXIED is False and PROX_ENV is not None:
             update_dns_record_ttl(record, TTL)
         else:
             if PROXIED is True:
