@@ -31,6 +31,8 @@ UPDATE_TYPE = os.getenv('UPDATE_TYPE')
 UPDATE_PROXY = os.getenv('UPDATE_PROXY')
 UPDATE_TTL = os.getenv('UPDATE_TTL')
 DOMAINS_LIST = []
+CF_ZONE_ID_LIST = []
+DNS_RECORD_COMMENT_KEY_LIST = []
 # Calcualte values from above variables
 if DOMAINS is not None:
     DOMAINS_LIST = DOMAINS.split(',')
