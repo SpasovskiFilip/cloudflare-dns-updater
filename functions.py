@@ -34,8 +34,10 @@ DOMAINS_LIST = []
 # Calcualte values from above variables
 if DOMAINS is not None:
     DOMAINS_LIST = DOMAINS.split(',')
-CF_ZONE_ID_LIST = CF_ZONE_ID.split(',')
-DNS_RECORD_COMMENT_KEY_LIST = DNS_RECORD_COMMENT_KEY.split(',')
+if CF_ZONE_ID is not None:
+    CF_ZONE_ID_LIST = CF_ZONE_ID.split(',')
+if DNS_RECORD_COMMENT_KEY is not None:
+    DNS_RECORD_COMMENT_KEY_LIST = DNS_RECORD_COMMENT_KEY.split(',')
 PROXIED = bool(PROX_ENV)
 TTL = int(TTL_ENV or "1")
 
