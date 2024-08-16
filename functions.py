@@ -54,42 +54,6 @@ IP_CHECK_SERVICES = [
     "https://ipinfo.io/ip",
 ]
 
-# # Get values from Environment variables
-# def init():
-#     """Initialize variables"""
-#     CF_API_TOKEN = os.getenv("CF_API_TOKEN")
-#     CF_ZONE_ID = os.getenv("CF_ZONE_ID")
-#     DNS_RECORD_COMMENT_KEY = os.getenv("DNS_RECORD_COMMENT_KEY")
-#     DOMAINS_FILE_PATH = os.getenv("DOMAINS_FILE_PATH")
-#     DOMAINS = os.getenv("DOMAINS")
-#     SCHEDULE_MINUTES = int(os.getenv("SCHEDULE_MINUTES", "5"))
-#     TTL_ENV = os.getenv("TTL")
-#     PROX_ENV = os.getenv("PROXIED")
-#     TYPE = os.getenv("TYPE")
-#     UPDATE_TYPE = os.getenv('UPDATE_TYPE')
-#     UPDATE_PROXY = os.getenv('UPDATE_PROXY')
-#     UPDATE_TTL = os.getenv('UPDATE_TTL')
-#     DOMAINS_LIST = []
-#     # Calcualte values from above variables
-#     if DOMAINS is not None:
-#         DOMAINS_LIST = DOMAINS.split(',')
-#     CF_ZONE_ID_LIST = CF_ZONE_ID.split(',')
-#     DNS_RECORD_COMMENT_KEY_LIST = DNS_RECORD_COMMENT_KEY.split(',')
-#     PROXIED = bool(PROX_ENV)
-#     TTL = int(TTL_ENV or "1")
-
-#     # Define API endpoints
-#     BASE_URL = "https://api.cloudflare.com/client/v4/"
-
-#     # List of IP checking services
-#     IP_CHECK_SERVICES = [
-#         "https://adresameaip.ro/ip",
-#         "https://api.ipify.org",
-#         "https://icanhazip.com",
-#         "https://ipinfo.io/ip",
-#     ]
-
-# init()
 
 def create_logger(level=logging.INFO):
     """Create the logger object"""
