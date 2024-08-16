@@ -9,6 +9,15 @@ env:
   CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
   CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
   DNS_RECORD_COMMENT_KEY: ${{ secrets.DNS_RECORD_COMMENT_KEY }}
+  DOMAINS_FILE_PATH: ${{ secrets.DOMAINS_FILE_PATH }}
+  DOMAINS: ${{ secrets.DOMAINS }}
+  SCHEDULE_MINUTES: "5"
+  TTL: "1"
+  PROXIED: "True"
+  TYPE: "A"
+  UPDATE_TYPE: "False"
+  UPDATE_PROXY: "False"
+  UPDATE_TTL: "False"
   
 jobs:
   build:
@@ -29,7 +38,7 @@ jobs:
       run: |
         pylint $(git ls-files '*.py')
     - name: Run pytest
-      uses: pavelzw/pytest-action@v2
+      uses: pavelzw/pytest-action@v2.2.0
       with:
         verbose: true
         emoji: true

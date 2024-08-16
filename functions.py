@@ -366,6 +366,7 @@ def get_dns_records_by_comment(zone_id, comment_key):
 
     return []
 
+
 def get_dns_records_by_comments(zone_id_list, comment_key_list):
     """Fetches all DNS records that contain the specified comment keys 
     inside of the comment from all specified zones"""
@@ -500,6 +501,7 @@ def check_and_update_dns_record_ttl(record, domain_name):
             "Environment variable %s is not defined.", nameof(TTL)
         )
 
+
 def check_connectivity():
     """Check if app is connectable to CF and if all needed variables are present"""
     if not is_connected():
@@ -555,18 +557,21 @@ def check_and_update_dns():
                     "IP addresses are the same for %s. No update needed.", domain_name
                 )
 
-            if UPDATE_TYPE is not None:
+            if UPDATE_TYPE is True:
                 check_and_update_dns_record_type(record, domain_name)
-            if UPDATE_PROXY is not None:
+            if UPDATE_PROXY is True:
                 check_and_update_dns_record_proxy(record, domain_name)
-            if UPDATE_TTL is not None:
+            if UPDATE_TTL is True:
                 check_and_update_dns_record_ttl(record, domain_name)
 
     else:
         LOGGER.error("Failed to retrieve public IP. Skipping check and update.")
 
+
 LOGGER.info("Schedule is set at %s minutes", SCHEDULE_MINUTES)
 
+
+# pytest
 
 def check_ip(ip):
     """Helper function to check valid IPs"""
@@ -576,10 +581,27 @@ def check_ip(ip):
     except ValueError:
         return False
 
+
 def test_get_public_ip():
     """Tests the get_public_ip() method"""
     assert check_ip(get_public_ip()) is True
 
+
 def test_check_connectivity():
     """Tests the check_connectivity() method"""
     assert check_connectivity() is True
+
+
+def test_get_all_dns_records():
+    """Tests the get_all_dns_records() method"""
+    assert len(get_all_dns_records()) != 0
+
+
+def test_get_dns_records_by_comments():
+    """Tests the get_dns_records_by_comments() method"""
+    assert len(get_dns_records_by_comments(CF_ZONE_ID_LIST, DNS_RECORD_COMMENT_KEY_LIST)) != 0
+
+
+def test_get_dns_records_by_domain_list():
+    """Tests the get_dns_records_by_domain_list() method"""
+    assert len(get_dns_records_by_domain_list(DOMAINS_LIST, CF_ZONE_ID_LIST)) != 0
