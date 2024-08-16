@@ -514,9 +514,9 @@ def check_connectivity():
             "CF_API_TOKEN Missing: You have to provide your Cloudflare API Token."
         )
         return False
-    if DNS_RECORD_COMMENT_KEY is None and DOMAINS_FILE_PATH is None:
+    if DNS_RECORD_COMMENT_KEY is None and DOMAINS_FILE_PATH is None and DOMAINS is None:
         LOGGER.error(
-            "DNS_RECORD_COMMENT_KEY and DOMAINS_FILE_PATH are missing,"
+            "DNS_RECORD_COMMENT_KEY and DOMAINS_FILE_PATH and DOMAINS are missing,"
             + " don't know which domains to update"
         )
         return False
