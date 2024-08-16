@@ -22,23 +22,27 @@ import requests
 import schedule
 from varname import nameof
 
-# Replace with your actual data
+# Get values from Environment variables
 CF_API_TOKEN = os.getenv("CF_API_TOKEN")
 CF_ZONE_ID = os.getenv("CF_ZONE_ID")
-CF_ZONE_ID_LIST = CF_ZONE_ID.split(',')
 DNS_RECORD_COMMENT_KEY = os.getenv("DNS_RECORD_COMMENT_KEY")
-DNS_RECORD_COMMENT_KEY_LIST = DNS_RECORD_COMMENT_KEY.split(',')
 DOMAINS_FILE_PATH = os.getenv("DOMAINS_FILE_PATH")
 DOMAINS = os.getenv("DOMAINS")
-DOMAINS_LIST = []
-if DOMAINS is not None:
-    DOMAINS_LIST = DOMAINS.split(',')
 SCHEDULE_MINUTES = int(os.getenv("SCHEDULE_MINUTES", "5"))
 TTL_ENV = os.getenv("TTL")
-TTL = int(TTL_ENV or "1")
 PROX_ENV = os.getenv("PROXIED")
-PROXIED = bool(PROX_ENV)
 TYPE = os.getenv("TYPE")
+UPDATE_TYPE = os.getenv('UPDATE_TYPE')
+UPDATE_PROXY = os.getenv('UPDATE_PROXY')
+UPDATE_TTL = os.getenv('UPDATE_TTL')
+DOMAINS_LIST = []
+# Calcualte values from above variables
+if DOMAINS is not None:
+    DOMAINS_LIST = DOMAINS.split(',')
+CF_ZONE_ID_LIST = CF_ZONE_ID.split(',')
+DNS_RECORD_COMMENT_KEY_LIST = DNS_RECORD_COMMENT_KEY.split(',')
+PROXIED = bool(PROX_ENV)
+TTL = int(TTL_ENV or "1")
 
 # Define API endpoints
 BASE_URL = "https://api.cloudflare.com/client/v4/"
@@ -86,8 +90,7 @@ LOGGER = create_logger()
 
 def get_dns_record(zone_id, domain_name):
     """Get current DNS record for the specified domain"""
-    LOGGER.info("Fetching record for '%s' in zone '%s'.", domain_name, zone_id)
-
+    LOGGER.info("Fetching record for '%s'.", domain_name)
     headers = {
         "Authorization": "Bearer " + CF_API_TOKEN,
         "Content-Type": "application/json",
@@ -110,6 +113,10 @@ def get_dns_record(zone_id, domain_name):
         if records:
             LOGGER.info("Successfully fetched data for '%s'.", domain_name)
             return records[0]
+        LOGGER.warning(
+            "Request was successful but no valid domains were found: %s",
+            response.json(),
+        )
     else:
         LOGGER.error(
             "Failed to fetch data for '%s'. Response: %s", domain_name, response.json()
@@ -232,10 +239,14 @@ def read_zones_from_file(json_file_path, zone_id):
         data = json.load(file)
 
     zones = data["zones"]
-
+    count = 1
     for zone in zones:
         if "$" in zone["id"]:
-            zone["id"] = zone_id
+            if str(count) in zone["id"]:
+                zone["id"] = zone_id[count-1]
+                count += 1
+            else:
+                zone["id"] = zone_id[0]
 
         for domain in zone["domains"]:
             domain["zone_id"] = zone["id"]
@@ -261,8 +272,29 @@ def get_dns_records_by_name(zones):
     return records
 
 
+def get_dns_records_by_domain_list(domain_list, zone_id_list):
+    """Fetches all DNS records that were loaded from file"""
+    records = []
+
+    LOGGER.info(
+        "Trying to fetch records for %s domains from %s zones.",
+        len(domain_list),
+        len(zone_id_list),
+    )
+
+    for zone in zone_id_list:
+        for domain in domain_list:
+            record = get_dns_record(zone, domain)
+
+            if record is not None:
+                records.append(record)
+
+    return records
+
+
 def get_dns_records_by_comment(zone_id, comment_key):
     """Fetches all DNS records that contain the comment key inside of the comment"""
+    LOGGER.info("Fetching DNS record with comment key: %s", comment_key)
     headers = {
         "Authorization": "Bearer " + CF_API_TOKEN,
         "Content-Type": "application/json",
@@ -272,7 +304,6 @@ def get_dns_records_by_comment(zone_id, comment_key):
         "comment.contains": comment_key,
     }
 
-    LOGGER.info("Fetching DNS record with comment key: %s", comment_key)
     response = requests.get(
         f"{BASE_URL}zones/{zone_id}/dns_records",
         headers=headers,
@@ -352,16 +383,22 @@ def get_all_dns_records():
             "Using DNS_RECORD_COMMENT_KEY='%s' to find DNS records to update.",
             DNS_RECORD_COMMENT_KEY,
         )
-        domain_records_list = get_dns_records_by_comments(CF_ZONE_ID_LIST, DNS_RECORD_COMMENT_KEY_LIST)
-        for list_item in domain_records_list:
+        domains_list = get_dns_records_by_comments(CF_ZONE_ID_LIST, DNS_RECORD_COMMENT_KEY_LIST)
+        for list_item in domains_list:
             domain_records += list_item
+    if DOMAINS is not None:
+        LOGGER.info(
+            "Using list of DOMAINS=[%s] to find DNS records to update.",
+            DOMAINS,
+        )
+        domain_records = get_dns_records_by_domain_list(DOMAINS_LIST, CF_ZONE_ID_LIST)
     else:
         LOGGER.info(
             "Using DOMAINS_FILE_PATH='%s' to find DNS records to update.",
             DOMAINS_FILE_PATH,
         )
         domain_records = get_dns_records_by_name(
-            read_zones_from_file(DOMAINS_FILE_PATH, CF_ZONE_ID)
+            read_zones_from_file(DOMAINS_FILE_PATH, CF_ZONE_ID_LIST)
         )
     return domain_records
 
@@ -428,28 +465,34 @@ def check_and_update_dns_record_ttl(record, domain_name):
             "Environment variable %s is not defined.", nameof(TTL)
         )
 
-
-def check_and_update_dns():
-    """Function to run the check and update process"""
-    LOGGER.info("Run triggered by schedule.")
-
+def check_connectivity():
+    """Check if app is connectable to CF and if all needed variables are present"""
     if not is_connected():
         LOGGER.error("No internet connection. Skipping check and update.")
-        return
+        return False
 
     if CF_ZONE_ID is None:
         LOGGER.error("CF_ZONE_ID: At least one zone id must be set.")
-        return
+        return False
     if CF_API_TOKEN is None:
         LOGGER.error(
             "CF_API_TOKEN Missing: You have to provide your Cloudflare API Token."
         )
-        return
+        return False
     if DNS_RECORD_COMMENT_KEY is None and DOMAINS_FILE_PATH is None:
         LOGGER.error(
             "DNS_RECORD_COMMENT_KEY and DOMAINS_FILE_PATH are missing,"
             + " don't know which domains to update"
         )
+        return False
+    return True
+
+
+def check_and_update_dns():
+    """Function to run the check and update process"""
+    LOGGER.info("Run triggered by schedule.")
+
+    if check_connectivity() is False:
         return
 
     public_ip = get_public_ip()
@@ -477,9 +520,12 @@ def check_and_update_dns():
                     "IP addresses are the same for %s. No update needed.", domain_name
                 )
 
-            check_and_update_dns_record_type(record, domain_name)
-            check_and_update_dns_record_proxy(record, domain_name)
-            check_and_update_dns_record_ttl(record, domain_name)
+            if UPDATE_TYPE is not None:
+                check_and_update_dns_record_type(record, domain_name)
+            if UPDATE_PROXY is not None:
+                check_and_update_dns_record_proxy(record, domain_name)
+            if UPDATE_TTL is not None:
+                check_and_update_dns_record_ttl(record, domain_name)
 
     else:
         LOGGER.error("Failed to retrieve public IP. Skipping check and update.")
