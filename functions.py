@@ -395,7 +395,7 @@ def get_all_dns_records():
         )
         domain_records = get_dns_records_by_domain_list(DOMAINS_LIST, CF_ZONE_ID_LIST)
         return domain_records
-    else:
+    if DOMAINS_FILE_PATH is not None:
         LOGGER.info(
             "Using DOMAINS_FILE_PATH='%s' to find DNS records to update.",
             DOMAINS_FILE_PATH,
