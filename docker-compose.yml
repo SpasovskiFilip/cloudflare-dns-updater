@@ -1,9 +1,33 @@
+#Docker compose for cloudflare-dns-updater
+version: "3.6"
 services:
-  dns-updater:
-    # Uncomment this to use an image instead of building locally
-    # image: your-image-tag
-    # Uncomment this to build locally
-    build: .
-    env_file:
-      - .env 
- 
+  cloudlfare-dns-updater:
+    image: "cloudflare-dns-updater:latest"
+    container_name: "cloudlfare-dns-updater"
+    volumes:
+      - app-data:/app # optional unless using the domains.json file and DOMAINS_FILE_PATH variable
+    environment:
+      CF_API_TOKEN: "YOUR_API_TOKEN" # Recomended to create a token for the zones, not use the main token
+      CF_ZONE_ID: "YOUR_ZONE_ID1,YOUR_ZONE_ID2" # Can be only 1 zone ID (usually is)
+      # Choose the method in which you get your domain records:
+      #   You must choose one method
+      #   DOMAINS_FILE_PATH is not needed if the DOMAINS or DNS_RECORD_COMMENT_KEY variables are set.
+      #   Edit the domains.json according to the example file in the mounted volume.
+      #   If you don't mount a volume, you cannot use the domains.json file and DOMAINS_FILE_PATH variable.
+
+      DNS_RECORD_COMMENT_KEY: "Comm1,Comm2" # Any DNS reccord that has any of the comments specified here. Can be 1 comment
+      # DOMAINS: "domain.com,example1.domain.com,example2.domain.com"
+      # DOMAINS_FILE_PATH: .\domains.json
+      SCHEDULE_MINUTES: 5
+      PROXIED: True # if proxied is set to True, TTL cannot be set/changed
+      TYPE: A # Supports either A, AAA or CNAME
+      TTL: 1
+    restart: "unless-stopped"
+
+volumes:
+  app-data:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: /volume1/docker/cloudflare-dns-updater

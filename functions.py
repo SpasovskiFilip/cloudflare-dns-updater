@@ -33,6 +33,7 @@ UPDATE_TTL = os.getenv('UPDATE_TTL')
 DOMAINS_LIST = []
 CF_ZONE_ID_LIST = []
 DNS_RECORD_COMMENT_KEY_LIST = []
+
 # Calcualte values from above variables
 if DOMAINS is not None:
     DOMAINS_LIST = DOMAINS.split(',')
@@ -386,6 +387,7 @@ def get_all_dns_records():
         domains_list = get_dns_records_by_comments(CF_ZONE_ID_LIST, DNS_RECORD_COMMENT_KEY_LIST)
         for list_item in domains_list:
             domain_records += list_item
+        return domain_records
     if DOMAINS is not None:
         LOGGER.info(
             "Using list of DOMAINS=[%s] to find DNS records to update.",
