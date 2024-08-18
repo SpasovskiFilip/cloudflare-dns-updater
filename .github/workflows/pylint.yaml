@@ -4,9 +4,24 @@ on:
   workflow_dispatch:
   push:
   pull_request:
+
+env:
+  CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+  CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+  DNS_RECORD_COMMENT_KEY: ${{ secrets.DNS_RECORD_COMMENT_KEY }}
+  DOMAINS_FILE_PATH: ${{ secrets.DOMAINS_FILE_PATH }}
+  DOMAINS: ${{ secrets.DOMAINS }}
+  SCHEDULE_MINUTES: "5"
+  TTL: "1"
+  PROXIED: "True"
+  TYPE: "A"
+  UPDATE_TYPE: "False"
+  UPDATE_PROXY: "False"
+  UPDATE_TTL: "False"
   
 jobs:
   build:
+    name: Run tests
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -17,8 +32,17 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pylint
+        pip install pylint pytest pytest-md pytest-emoji
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Analysing the code with pylint
       run: |
         pylint $(git ls-files '*.py')
+    - name: Run pytest
+      uses: pavelzw/pytest-action@v2.2.0
+      with:
+        verbose: true
+        emoji: true
+        job-summary: true
+        custom-arguments: 'functions.py -q'
+        click-to-expand: true
+        report-title: 'Test Report'
