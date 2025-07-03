@@ -2,3 +2,5 @@ dns_updater.log
 scripts/*
 .vscode/
 __pycache__/
+.venv/
+*.pyc
