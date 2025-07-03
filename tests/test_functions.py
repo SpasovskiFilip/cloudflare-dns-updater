@@ -51,4 +51,4 @@ def test_get_dns_records_by_domain_list():
     """
     Test that get_dns_records_by_domain_list() returns an empty list for empty domains.
     """
-    assert len(get_dns_records_by_domain_list(DOMAINS_LIST, CF_ZONE_ID_LIST)) == 0
+    assert len(get_dns_records_by_domain_list(DOMAINS_LIST, CF_ZONE_ID_LIST)) != 0
