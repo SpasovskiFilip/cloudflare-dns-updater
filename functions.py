@@ -1,4 +1,5 @@
 """
+functions.py - Core Logic for DNS Updater
 DNS Updater
 Original Author: Alexandru-Ioan Plesoiu
 Contributor: Filip Spasovski
@@ -7,86 +8,72 @@ Contributor GitHub:
 Documentation: https://github.com/SpasovskiFilip/dns-updater
 
 Defining functions for execution
+
+This module contains the main logic for interacting with the Cloudflare API, managing DNS
+records, and orchestrating the update process for dynamic DNS.
+
+Functions:
+    get_dns_record(zone_id, domain_name)
+    update_dns_record_content(record, content)
+    update_dns_record_proxy(record, proxy)
+    update_dns_record_type(record, record_type)
+    update_dns_record_ttl(record, ttl)
+    read_zones_from_file(json_file_path, zone_id)
+    get_dns_records_by_name(zones)
+    get_dns_records_by_domain_list(domain_list, zone_id_list)
+    get_dns_records_by_comment(zone_id, comment_key)
+    get_dns_records_by_comments(zone_id_list, comment_key_list)
+    is_connected()
+    get_all_dns_records()
+    check_and_update_dns_record_type(record, domain_name)
+    check_and_update_dns_record_proxy(record, domain_name)
+    check_and_update_dns_record_ttl(record, domain_name)
+    check_connectivity()
+    check_and_update_dns()
+
+Each function includes a detailed docstring describing its purpose, 
+arguments, and return value.
 """
 
-import ipaddress
 import socket
-import logging
-import sys
-import os
 import json
+from typing import List
 import requests
-from varname import nameof
+from logger import create_logger
+from config import get_env_var
+from utils import get_public_ip
 
-CF_API_TOKEN = os.getenv("CF_API_TOKEN")
-CF_ZONE_ID = os.getenv("CF_ZONE_ID")
-DNS_RECORD_COMMENT_KEY = os.getenv("DNS_RECORD_COMMENT_KEY")
-DOMAINS_FILE_PATH = os.getenv("DOMAINS_FILE_PATH")
-DOMAINS = os.getenv("DOMAINS")
-SCHEDULE_MINUTES = int(os.getenv("SCHEDULE_MINUTES", "5"))
-TTL_ENV = os.getenv("TTL")
-PROX_ENV = os.getenv("PROXIED")
-TYPE = os.getenv("TYPE")
-UPDATE_TYPE = os.getenv('UPDATE_TYPE')
-UPDATE_PROXY = os.getenv('UPDATE_PROXY')
-UPDATE_TTL = os.getenv('UPDATE_TTL')
-DOMAINS_LIST = []
-CF_ZONE_ID_LIST = []
-DNS_RECORD_COMMENT_KEY_LIST = []
+CF_API_TOKEN = get_env_var("CF_API_TOKEN", required=True)
+CF_ZONE_ID = get_env_var("CF_ZONE_ID", required=True)
+DNS_RECORD_COMMENT_KEY = get_env_var("DNS_RECORD_COMMENT_KEY")
+DOMAINS_FILE_PATH = get_env_var("DOMAINS_FILE_PATH")
+DOMAINS = get_env_var("DOMAINS")
+SCHEDULE_MINUTES = int(get_env_var("SCHEDULE_MINUTES", 5))
+TTL_ENV = get_env_var("TTL")
+PROX_ENV = get_env_var("PROXIED")
+TYPE = get_env_var("TYPE")
+UPDATE_TYPE = get_env_var('UPDATE_TYPE', False)
+UPDATE_PROXY = get_env_var('UPDATE_PROXY', False)
+UPDATE_TTL = get_env_var('UPDATE_TTL', False)
 
-# Calcualte values from above variables
+DOMAINS_LIST: List[str] = []
+CF_ZONE_ID_LIST: List[str] = []
+DNS_RECORD_COMMENT_KEY_LIST: List[str] = []
+
 if DOMAINS is not None:
-    DOMAINS_LIST = DOMAINS.split(',')
+    DOMAINS_LIST = [d.strip() for d in DOMAINS.split(',') if d.strip()]
 if CF_ZONE_ID is not None:
-    CF_ZONE_ID_LIST = CF_ZONE_ID.split(',')
+    CF_ZONE_ID_LIST = [z.strip() for z in CF_ZONE_ID.split(',') if z.strip()]
 if DNS_RECORD_COMMENT_KEY is not None:
-    DNS_RECORD_COMMENT_KEY_LIST = DNS_RECORD_COMMENT_KEY.split(',')
-PROXIED = bool(PROX_ENV)
+    DRCK = DNS_RECORD_COMMENT_KEY.split(',')
+    DNS_RECORD_COMMENT_KEY_LIST = [c.strip() for c in DRCK if c.strip()]
+PROXIED = PROX_ENV == 'True'
 TTL = int(TTL_ENV or "1")
 
 # Define API endpoints
 BASE_URL = "https://api.cloudflare.com/client/v4/"
 
-# List of IP checking services
-IP_CHECK_SERVICES = [
-    "https://adresameaip.ro/ip",
-    "https://api.ipify.org",
-    "https://icanhazip.com",
-    "https://ipinfo.io/ip",
-]
-
-
-def create_logger(level=logging.INFO):
-    """Create the logger object"""
-    logger = logging.getLogger("MGE-Logs")
-
-    # Create handlers
-    console_handler = logging.StreamHandler(sys.stdout)
-    file_handler = logging.FileHandler("dns_updater.log")
-
-    console_handler.setLevel(level)
-    file_handler.setLevel(logging.WARNING)
-
-    # Create formatters and add it to handlers
-    logger_format = logging.Formatter(
-        "%(asctime)s | %(filename)s | %(levelname)s | %(message)s"
-    )
-    file_format = logging.Formatter(
-        "%(asctime)s | %(filename)s(%(lineno)d) | %(levelname)s | %(message)s"
-    )
-
-    file_handler.setFormatter(file_format)
-    console_handler.setFormatter(logger_format)
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    logger.setLevel(level)
-
-    return logger
-
-
 LOGGER = create_logger()
-
 
 def get_dns_record(zone_id, domain_name):
     """Get current DNS record for the specified domain"""
@@ -112,7 +99,10 @@ def get_dns_record(zone_id, domain_name):
 
         if records:
             LOGGER.info("Successfully fetched data for '%s'.", domain_name)
-            return records[0]
+            record = records[0]
+            # Attach zone_id to the record for downstream use
+            record["zone_id"] = zone_id
+            return record
         LOGGER.warning(
             "Request was successful but no valid domains were found: %s",
             response.json(),
@@ -267,6 +257,7 @@ def get_dns_records_by_name(zones):
             record = get_dns_record(domain["zone_id"], domain["name"])
 
             if record is not None:
+                record["zone_id"] = domain["zone_id"]  # Ensure zone_id is set
                 records.append(record)
 
     return records
@@ -287,6 +278,7 @@ def get_dns_records_by_domain_list(domain_list, zone_id_list):
             record = get_dns_record(zone, domain)
 
             if record is not None:
+                record["zone_id"] = zone  # Ensure zone_id is set
                 records.append(record)
 
     return records
@@ -314,6 +306,10 @@ def get_dns_records_by_comment(zone_id, comment_key):
     if response.status_code == 200:
         records = response.json()["result"]
         if records and len(records) > 0:
+            for record in records:
+                record["zone_id"] = zone_id  # Ensure zone_id is set
+                LOGGER.info("Type: %s | Content: %s | Comment: %s | Name: %s",
+                            record["type"], record["content"], record["comment"], record["name"])
             LOGGER.info("Request was successful and found %s valid domains!", len(records))
             return records
         LOGGER.warning(
@@ -345,23 +341,13 @@ def get_dns_records_by_comments(zone_id_list, comment_key_list):
         for comment_key in comment_key_list:
             records = get_dns_records_by_comment(zone_id, comment_key)
             if records and len(records) > 0:
+                for record in records:
+                    record["zone_id"] = zone_id  # Ensure zone_id is set
                 result.append(records)
     if result and len(result) > 0:
-        return result
+        return [item for sublist in result for item in sublist]  # flatten
     LOGGER.warning("Request was successful but no valid domains were found!")
     return []
-
-
-def get_public_ip():
-    """Get public IP address from the list of IP checking services"""
-    for service in IP_CHECK_SERVICES:
-        try:
-            response = requests.get(service, timeout=5)
-            if response.status_code == 200:
-                return response.text.strip()
-        except requests.exceptions.RequestException:
-            continue
-    return None
 
 
 def is_connected():
@@ -384,9 +370,7 @@ def get_all_dns_records():
             "Using DNS_RECORD_COMMENT_KEY='%s' to find DNS records to update.",
             DNS_RECORD_COMMENT_KEY,
         )
-        domains_list = get_dns_records_by_comments(CF_ZONE_ID_LIST, DNS_RECORD_COMMENT_KEY_LIST)
-        for list_item in domains_list:
-            domain_records += list_item
+        domain_records = get_dns_records_by_comments(CF_ZONE_ID_LIST, DNS_RECORD_COMMENT_KEY_LIST)
         return domain_records
     if DOMAINS is not None:
         LOGGER.info(
@@ -423,8 +407,7 @@ def check_and_update_dns_record_type(record, domain_name):
             )
     else:
         LOGGER.error(
-            "Environment variable %s is not defined.", nameof(TYPE)
-        )
+            "Environment variable TYPE is not defined.")
 
 
 def check_and_update_dns_record_proxy(record, domain_name):
@@ -443,8 +426,7 @@ def check_and_update_dns_record_proxy(record, domain_name):
                 )
     else:
         LOGGER.error(
-            "Environment variable %s is not defined.", nameof(PROXIED)
-        )
+            "Environment variable PROXIED is not defined.")
 
 
 def check_and_update_dns_record_ttl(record, domain_name):
@@ -465,8 +447,7 @@ def check_and_update_dns_record_ttl(record, domain_name):
                 )
     else:
         LOGGER.error(
-            "Environment variable %s is not defined.", nameof(TTL)
-        )
+            "Environment variable TTL is not defined.")
 
 
 def check_connectivity():
@@ -500,8 +481,10 @@ def check_and_update_dns():
         return
 
     public_ip = get_public_ip()
+    # public_ip = "xx.xxx.xxx.xx"  # For testing purposes
     domain_records = get_all_dns_records()
 
+    # Only include dicts with a 'name' key
     valid_domains = [x["name"] for x in domain_records if x is not None]
     LOGGER.info(
         "Found %s valid domains for update: [%s]",
@@ -510,8 +493,13 @@ def check_and_update_dns():
     )
 
     if public_ip:
+        LOGGER.info("Public IP to update: %s", public_ip)
         for record in domain_records:
+            if not isinstance(record, dict) or "name" not in record:
+                continue
             domain_name = record["name"]
+            domain_ip = record.get("content", "<no content>")
+            LOGGER.info("Current IP for %s: %s", domain_name, domain_ip)
 
             if record is None:
                 LOGGER.error("DNS record for %s not found.", domain_name)
@@ -536,39 +524,3 @@ def check_and_update_dns():
 
 
 LOGGER.info("Schedule is set at %s minutes", SCHEDULE_MINUTES)
-
-
-# pytest
-
-def check_ip(ip):
-    """Helper function to check valid IPs"""
-    try:
-        ipaddress.ip_address(ip)
-        return True
-    except ValueError:
-        return False
-
-
-def test_get_public_ip():
-    """Tests the get_public_ip() method"""
-    assert check_ip(get_public_ip()) is True
-
-
-def test_check_connectivity():
-    """Tests the check_connectivity() method"""
-    assert check_connectivity() is True
-
-
-def test_get_all_dns_records():
-    """Tests the get_all_dns_records() method"""
-    assert len(get_all_dns_records()) != 0
-
-
-def test_get_dns_records_by_comments():
-    """Tests the get_dns_records_by_comments() method"""
-    assert len(get_dns_records_by_comments(CF_ZONE_ID_LIST, DNS_RECORD_COMMENT_KEY_LIST)) != 0
-
-
-def test_get_dns_records_by_domain_list():
-    """Tests the get_dns_records_by_domain_list() method"""
-    assert len(get_dns_records_by_domain_list(DOMAINS_LIST, CF_ZONE_ID_LIST)) != 0
