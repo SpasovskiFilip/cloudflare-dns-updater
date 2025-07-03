@@ -39,4 +39,15 @@ jobs:
         pylint $(git ls-files '*.py')
     - name: Run pytest
       run: |
-        pytest -v
+        pytest -v --maxfail=1 --disable-warnings --tb=short --junitxml=pytest-report.xml
+    - name: Pytest Summary
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: Pytest Report
+        path: pytest-report.xml
+    - name: Publish Test Results
+      if: always()
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      with:
+        files: pytest-report.xml
